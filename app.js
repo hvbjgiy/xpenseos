@@ -1,11 +1,9 @@
-// XpenseOS — full app, no build step needed
-// Uses: React via CDN, htm for JSX-like syntax, Supabase JS client
-
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { createElement as h, useState, useEffect, useRef, useCallback, Fragment } from 'https://cdn.jsdelivr.net/npm/react@18/+esm';
-import { createRoot } from 'https://cdn.jsdelivr.net/npm/react-dom@18/client/+esm';
-import htm from 'https://cdn.jsdelivr.net/npm/htm@3/+esm';
-const html = htm.bind(h);
+// XpenseOS — fixed React imports
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import React, { useState, useEffect, useRef, useCallback } from 'https://esm.sh/react@18';
+import { createRoot } from 'https://esm.sh/react-dom@18/client';
+import htm from 'https://esm.sh/htm@3';
+const html = htm.bind(React.createElement);
 
 /* ══════════════════════════════════════════
    SUPABASE
@@ -45,10 +43,9 @@ const lsSet = (k,v)  => { try{ localStorage.setItem(k,JSON.stringify(v)); }catch
 /* ══════════════════════════════════════════
    SUPABASE HELPERS
 ══════════════════════════════════════════ */
-async function dbLoadExpenses(){ const {data}=await sb.from('expenses').select('*').order('created_at',{ascending:false}); return (data||[]).map(r=>({id:r.id,amount:r.amount,category:r.category,subType:r.sub_type,note:r.note,date:r.date,createdAt:r.created_at,settled:r.settled})); }
-async function dbLoadIncome(){   const {data}=await sb.from('income').select('*').order('created_at',{ascending:false});   return (data||[]).map(r=>({id:r.id,amount:r.amount,source:r.source,note:r.note,date:r.date,createdAt:r.created_at})); }
+async function dbLoadExpenses(){ const {data,error}=await sb.from('expenses').select('*').order('created_at',{ascending:false}); if(error)throw error; return (data||[]).map(r=>({id:r.id,amount:Number(r.amount),category:r.category,subType:r.sub_type,note:r.note,date:r.date,createdAt:r.created_at,settled:r.settled})); }
+async function dbLoadIncome(){   const {data,error}=await sb.from('income').select('*').order('created_at',{ascending:false});   if(error)throw error; return (data||[]).map(r=>({id:r.id,amount:Number(r.amount),source:r.source,note:r.note,date:r.date,createdAt:r.created_at})); }
 async function dbLoadBudgets(){ const {data}=await sb.from('budgets').select('*').eq('id','default'); return data&&data[0]?data[0].data:null; }
-
 async function dbAddExpense(e){  await sb.from('expenses').insert({id:e.id,amount:e.amount,category:e.category,sub_type:e.subType||null,note:e.note||null,date:e.date,created_at:e.createdAt,settled:false}); }
 async function dbAddIncome(e){   await sb.from('income').insert({id:e.id,amount:e.amount,source:e.source,note:e.note||null,date:e.date,created_at:e.createdAt}); }
 async function dbDeleteExpense(id){ await sb.from('expenses').delete().eq('id',id); }
@@ -100,47 +97,38 @@ function AddView({eAmt,setEAmt,eCat,setECat,eSub,setESub,eNote,setENote,eDate,se
   const jump=(e,nr,action)=>{ if(e.key==='Enter'){e.preventDefault(); nr?nr.current?.focus():action?.(); } };
 
   return html`<div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,alignItems:'start'}}>
-
     <div class="card" style=${{border:'1px solid #ff6b3520'}}>
       <div style=${{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent,#ff6b35,transparent)',borderRadius:'16px 16px 0 0'}}/>
       <p style=${{fontFamily:"'Orbitron',monospace",fontSize:15,color:'#ff6b35',marginBottom:4,fontWeight:700}}>⚡ Log Expense</p>
       <p style=${{fontSize:11,color:'#3a5070',marginBottom:18,fontFamily:"'DM Mono',monospace"}}><span class="kbd">Enter</span> jumps fields · <span class="kbd">Enter</span> on Date saves</p>
-
       <div style=${{marginBottom:14}}>
         <label class="lbl">Amount ₹</label>
         <input ref=${eAmtR} class="inp" type="number" inputMode="decimal" placeholder="0" autoFocus
           style=${{fontSize:28,fontWeight:900,color:'#ff6b35',fontFamily:"'Orbitron',monospace"}}
           value=${eAmt} onInput=${e=>setEAmt(e.target.value)} onKeyDown=${e=>jump(e,eNoteR)}/>
       </div>
-
       <div style=${{marginBottom:14}}>
         <label class="lbl">Category</label>
         <div style=${{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6}}>
-          ${CATS.map(c=>html`<button key=${c.id} class="catbtn"
-            onClick=${()=>{ setECat(c.id); setESub(''); }}
+          ${CATS.map(c=>html`<button key=${c.id} class="catbtn" onClick=${()=>{ setECat(c.id); setESub(''); }}
             style=${{background:eCat===c.id?`${c.color}18`:'#070e1c',border:`1px solid ${eCat===c.id?c.color:'#1a2840'}`,color:eCat===c.id?c.color:'#3a5070',boxShadow:eCat===c.id?`0 0 14px ${c.glow}`:'none'}}>
             <span style=${{fontSize:18}}>${c.icon}</span>
             <span style=${{fontSize:9,lineHeight:1.2}}>${c.label.split(' ')[0]}</span>
           </button>`)}
         </div>
       </div>
-
       ${cat?.subs&&html`<div style=${{marginBottom:14}}>
         <label class="lbl">Sub-type</label>
         <div style=${{display:'flex',gap:8}}>
           ${cat.subs.map(s=>html`<button key=${s} onClick=${()=>setESub(s)}
-            style=${{flex:1,background:eSub===s?`${cat.color}18`:'#070e1c',border:`1px solid ${eSub===s?cat.color:'#1a2840'}`,color:eSub===s?cat.color:'#3a5070',borderRadius:10,padding:'9px',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:700,transition:'all .15s'}}>
-            ${s}
-          </button>`)}
+            style=${{flex:1,background:eSub===s?`${cat.color}18`:'#070e1c',border:`1px solid ${eSub===s?cat.color:'#1a2840'}`,color:eSub===s?cat.color:'#3a5070',borderRadius:10,padding:'9px',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:700}}>${s}</button>`)}
         </div>
       </div>`}
-
       <div style=${{marginBottom:14}}>
         <label class="lbl">${cat?.id==='lend'?'Who did you lend to?':'Note'}</label>
         <input ref=${eNoteR} class="inp" placeholder=${cat?.id==='lend'?'Person\'s name...':'What was this for? (optional)'}
           value=${eNote} onInput=${e=>setENote(e.target.value)} onKeyDown=${e=>jump(e,eDateR)}/>
       </div>
-
       <div style=${{marginBottom:20}}>
         <label class="lbl">Date</label>
         <input ref=${eDateR} class="inp" type="date" value=${eDate}
@@ -153,27 +141,23 @@ function AddView({eAmt,setEAmt,eCat,setECat,eSub,setESub,eNote,setENote,eDate,se
       <div style=${{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent,#00ff88,transparent)',borderRadius:'16px 16px 0 0'}}/>
       <p style=${{fontFamily:"'Orbitron',monospace",fontSize:15,color:'#00ff88',marginBottom:4,fontWeight:700}}>💚 Log Income</p>
       <p style=${{fontSize:11,color:'#3a5070',marginBottom:18,fontFamily:"'DM Mono',monospace"}}><span class="kbd">Enter</span> jumps fields · <span class="kbd">Enter</span> on Date saves</p>
-
       <div style=${{marginBottom:14}}>
         <label class="lbl">Amount ₹</label>
         <input ref=${iAmtR} class="inp" type="number" inputMode="decimal" placeholder="0"
           style=${{fontSize:28,fontWeight:900,color:'#00ff88',fontFamily:"'Orbitron',monospace"}}
           value=${iAmt} onInput=${e=>setIAmt(e.target.value)} onKeyDown=${e=>jump(e,iNoteR)}/>
       </div>
-
       <div style=${{marginBottom:14}}>
         <label class="lbl">Source</label>
         <select class="inp" value=${iSrc} onChange=${e=>setISrc(e.target.value)}>
           ${INC_SOURCES.map(s=>html`<option key=${s}>${s}</option>`)}
         </select>
       </div>
-
       <div style=${{marginBottom:14}}>
         <label class="lbl">Note (optional)</label>
         <input ref=${iNoteR} class="inp" placeholder="e.g. March salary, dad sent money..."
           value=${iNote} onInput=${e=>setINote(e.target.value)} onKeyDown=${e=>jump(e,iDateR)}/>
       </div>
-
       <div style=${{marginBottom:20}}>
         <label class="lbl">Date</label>
         <input ref=${iDateR} class="inp" type="date" value=${iDate}
@@ -191,13 +175,10 @@ function DashView({month,setMonth,year,monthExp,monthInc,totalIncome,totalSpent,
   const sorted=[...CATS].sort((a,b)=>(byCategory[b.id]||0)-(byCategory[a.id]||0));
   const overBudget=CATS.filter(c=>byCategory[c.id]>(budgets[c.id]||c.budget));
   const recent=[...monthExp.map(e=>({...e,_t:'exp'})),...monthInc.map(e=>({...e,_t:'inc'}))].sort((a,b)=>b.createdAt-a.createdAt).slice(0,8);
-
   return html`<div style=${{display:'flex',flexDirection:'column',gap:16}}>
-
     <div style=${{display:'flex',gap:5,overflowX:'auto',paddingBottom:2}}>
-      ${MSHORT.map((m,i)=>html`<button key=${m} onClick=${()=>setMonth(i)} style=${{background:month===i?'linear-gradient(135deg,#00d4ff,#0088aa)':'#0a1020',color:month===i?'#060d18':'#3a5070',border:`1px solid ${month===i?'#00d4ff':'#1a2840'}`,borderRadius:20,padding:'5px 13px',cursor:'pointer',fontSize:11,fontWeight:800,whiteSpace:'nowrap',fontFamily:"'DM Mono',monospace",boxShadow:month===i?'0 0 14px #00d4ff40':'none',flexShrink:0,transition:'all .2s'}}>${m}</button>`)}
+      ${MSHORT.map((m,i)=>html`<button key=${m} onClick=${()=>setMonth(i)} style=${{background:month===i?'linear-gradient(135deg,#00d4ff,#0088aa)':'#0a1020',color:month===i?'#060d18':'#3a5070',border:`1px solid ${month===i?'#00d4ff':'#1a2840'}`,borderRadius:20,padding:'5px 13px',cursor:'pointer',fontSize:11,fontWeight:800,whiteSpace:'nowrap',fontFamily:"'DM Mono',monospace",boxShadow:month===i?'0 0 14px #00d4ff40':'none',flexShrink:0}}>${m}</button>`)}
     </div>
-
     <div class="card">
       <div style=${{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent,#00d4ff,transparent)',borderRadius:'16px 16px 0 0'}}/>
       <p style=${{fontFamily:"'DM Mono',monospace",fontSize:10,color:'#3a5070',letterSpacing:2,marginBottom:6}}>${MONTHS[month].toUpperCase()} ${year} · OVERVIEW</p>
@@ -216,15 +197,13 @@ function DashView({month,setMonth,year,monthExp,monthInc,totalIncome,totalSpent,
         ${totalLend>0&&html`<${Pill} label="Owed to You" value=${fmt(totalLend)} color="#f59e0b" sub=${`${pendingLends.length} pending`}/>`}
       </div>
     </div>
-
     ${overBudget.length>0&&html`<div class="card" style=${{border:'1px solid #ef444440',background:'linear-gradient(135deg,#160505,#200808)',animation:'pulse 2s infinite'}}>
-      <p style=${{fontSize:11,color:'#ef4444',fontWeight:800,marginBottom:10,fontFamily:"'DM Mono',monospace",letterSpacing:1}}>⚡ BUDGET BREACH · ${overBudget.length} CATEGOR${overBudget.length>1?'IES':'Y'}</p>
+      <p style=${{fontSize:11,color:'#ef4444',fontWeight:800,marginBottom:10,fontFamily:"'DM Mono',monospace"}}>⚡ BUDGET BREACH · ${overBudget.length} CATEGOR${overBudget.length>1?'IES':'Y'}</p>
       ${overBudget.map(c=>html`<div key=${c.id} style=${{display:'flex',justifyContent:'space-between',marginBottom:4}}>
         <span style=${{fontSize:12,color:'#fca5a5'}}>${c.icon} ${c.label}</span>
         <span style=${{fontSize:12,fontFamily:"'DM Mono',monospace",color:'#ef4444',fontWeight:700}}>${fmt(byCategory[c.id])} / ${fmt(budgets[c.id])}</span>
       </div>`)}
     </div>`}
-
     <div class="card">
       <p style=${{fontFamily:"'DM Mono',monospace",fontSize:10,color:'#3a5070',letterSpacing:2,marginBottom:16}}>CATEGORY BREAKDOWN</p>
       ${sorted.filter(c=>byCategory[c.id]>0).length===0
@@ -243,7 +222,6 @@ function DashView({month,setMonth,year,monthExp,monthInc,totalIncome,totalSpent,
           })}
         </div>`}
     </div>
-
     ${pendingLends.length>0&&html`<div class="card" style=${{border:'1px solid #f59e0b25'}}>
       <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
         <p style=${{fontFamily:"'DM Mono',monospace",fontSize:10,color:'#f59e0b',letterSpacing:2}}>🤝 MONEY OWED TO YOU</p>
@@ -258,23 +236,20 @@ function DashView({month,setMonth,year,monthExp,monthInc,totalIncome,totalSpent,
         <button onClick=${()=>settleLend(e.id)} style=${{background:'#f59e0b15',border:'1px solid #f59e0b40',color:'#f59e0b',borderRadius:8,padding:'5px 12px',cursor:'pointer',fontSize:11,fontWeight:800,fontFamily:"'DM Mono',monospace"}}>✓ Received</button>
       </div>`)}
     </div>`}
-
     <div class="card">
       <p style=${{fontFamily:"'DM Mono',monospace",fontSize:10,color:'#3a5070',letterSpacing:2,marginBottom:14}}>RECENT TRANSACTIONS</p>
       ${recent.length===0&&html`<p style=${{color:'#3a5070',fontSize:13,textAlign:'center',padding:'16px 0'}}>Nothing logged this month</p>`}
       ${recent.map((e,i)=>{
         const cat=CATS.find(c=>c.id===e.category);
         return html`<div key=${e.id} style=${{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:i<recent.length-1?'1px solid #0a1020':'none'}}>
-          <div style=${{width:38,height:38,borderRadius:10,background:e._t==='inc'?'#00ff8818':`${cat?.color}18`,border:`1px solid ${e._t==='inc'?'#00ff8828':`${cat?.color}28`}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>
-            ${e._t==='inc'?'💚':cat?.icon}
-          </div>
+          <div style=${{width:38,height:38,borderRadius:10,background:e._t==='inc'?'#00ff8818':`${cat?.color}18`,border:`1px solid ${e._t==='inc'?'#00ff8828':`${cat?.color}28`}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>${e._t==='inc'?'💚':cat?.icon}</div>
           <div style=${{flex:1,minWidth:0}}>
             <p style=${{fontSize:13,fontWeight:600,color:'#c8d8f0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${e.note||(e._t==='inc'?e.source:cat?.label)}</p>
             <p style=${{fontSize:11,color:'#3a5070',fontFamily:"'DM Mono',monospace"}}>${e._t==='inc'?e.source:`${cat?.label}${e.subType?' · '+e.subType:''}`} · ${e.date}</p>
           </div>
           <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
             <span style=${{fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:14,color:e._t==='inc'?'#00ff88':'#ff6b35'}}>${e._t==='inc'?'+':'-'}${fmt(e.amount)}</span>
-            <button class="del-btn" onClick=${()=>e._t==='inc'?deleteInc(e.id):deleteExp(e.id)} title="Delete">✕</button>
+            <button class="del-btn" onClick=${()=>e._t==='inc'?deleteInc(e.id):deleteExp(e.id)}>✕</button>
           </div>
         </div>`;
       })}
@@ -302,7 +277,7 @@ function HistView({monthExp,monthInc,deleteExp,deleteInc,settleLend}){
   };
   return html`<div style=${{display:'flex',flexDirection:'column',gap:14}}>
     <div class="card">
-      <input class="inp" placeholder="🔍 Search by name, note or category..." value=${search} onInput=${e=>setSearch(e.target.value)} style=${{marginBottom:10}}/>
+      <input class="inp" placeholder="🔍 Search..." value=${search} onInput=${e=>setSearch(e.target.value)} style=${{marginBottom:10}}/>
       <div style=${{display:'flex',gap:6,overflowX:'auto',paddingBottom:2}}>
         ${[{id:'all',label:'All',icon:'◈'},{id:'inc',label:'Income',icon:'💚'},...CATS].map(c=>html`<button key=${c.id} onClick=${()=>setFilterCat(c.id)} style=${{background:filterCat===c.id?'#00d4ff18':'#070e1c',border:`1px solid ${filterCat===c.id?'#00d4ff':'#1a2840'}`,color:filterCat===c.id?'#00d4ff':'#3a5070',borderRadius:20,padding:'4px 12px',cursor:'pointer',fontSize:11,fontWeight:700,whiteSpace:'nowrap',fontFamily:"'DM Mono',monospace",flexShrink:0}}>${c.icon} ${c.label}</button>`)}
       </div>
@@ -327,7 +302,7 @@ function HistView({monthExp,monthInc,deleteExp,deleteInc,settleLend}){
             <span style=${{fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:14,color:e._t==='inc'?'#00ff88':'#ff6b35'}}>${e._t==='inc'?'+':'-'}${fmt(e.amount)}</span>
             <div style=${{display:'flex',gap:4}}>
               ${e.category==='lend'&&!e.settled&&html`<button onClick=${()=>settleLend(e.id)} style=${{fontSize:10,background:'#f59e0b15',border:'1px solid #f59e0b40',color:'#f59e0b',borderRadius:6,padding:'2px 8px',cursor:'pointer',fontFamily:"'DM Mono',monospace",fontWeight:700}}>Got back</button>`}
-              <button onClick=${()=>tryDelete(e.id,e._t)} style=${{fontSize:11,background:isArmed?'#ef444430':'#ef444410',border:`1px solid ${isArmed?'#ef4444':'#ef444430'}`,color:isArmed?'#ef4444':'#3a5070',borderRadius:6,padding:'2px 10px',cursor:'pointer',fontFamily:"'DM Mono',monospace",fontWeight:700,transition:'all .2s'}}>${isArmed?'confirm ✕':'✕'}</button>
+              <button onClick=${()=>tryDelete(e.id,e._t)} style=${{fontSize:11,background:isArmed?'#ef444430':'#ef444410',border:`1px solid ${isArmed?'#ef4444':'#ef444430'}`,color:isArmed?'#ef4444':'#3a5070',borderRadius:6,padding:'2px 10px',cursor:'pointer',fontFamily:"'DM Mono',monospace",fontWeight:700}}>${isArmed?'confirm ✕':'✕'}</button>
             </div>
           </div>
         </div>`;
@@ -344,7 +319,7 @@ function BudgetView({byCategory,budgets,saveBudgets,showToast}){
   return html`<div style=${{display:'flex',flexDirection:'column',gap:16}}>
     <div class="card">
       <p style=${{fontFamily:"'Orbitron',monospace",fontSize:15,color:'#00d4ff',marginBottom:4,fontWeight:700}}>Monthly Budgets</p>
-      <p style=${{fontSize:12,color:'#3a5070',marginBottom:20}}>Type a new amount · press <span class="kbd">Enter</span> per field or hit Save All.</p>
+      <p style=${{fontSize:12,color:'#3a5070',marginBottom:20}}>Type a new amount · press <span class="kbd">Enter</span> per field or Save All.</p>
       <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
         ${CATS.map(c=>{
           const bud=local[c.id]||c.budget;
@@ -379,14 +354,13 @@ function SettingsView({expenses,income,pendingLends,showToast}){
     <div style=${{display:'flex',flexDirection:'column',gap:16}}>
       <div class="card" style=${{border:'1px solid #00d4ff20'}}>
         <p style=${{fontFamily:"'Orbitron',monospace",fontSize:14,color:'#00d4ff',marginBottom:14,fontWeight:700}}>☁️ Cloud Sync</p>
-        <p style=${{fontSize:12,color:'#3a5070',lineHeight:1.7}}>Your data is automatically synced to Supabase cloud. Open the same URL on any device — laptop, iPhone — and your data will be there.</p>
+        <p style=${{fontSize:12,color:'#3a5070',lineHeight:1.7}}>Your data syncs automatically to Supabase. Open the same URL on any device and your data will be there.</p>
         <div style=${{marginTop:12,background:'#070e1c',border:'1px solid #1a2840',borderRadius:10,padding:'10px 14px'}}>
           <p style=${{fontSize:11,color:'#3a5070',fontFamily:"'DM Mono',monospace"}}>🌐 hvbjgiy.github.io/xpenseos</p>
         </div>
       </div>
       <div class="card" style=${{border:'1px solid #ef444428'}}>
         <p style=${{fontFamily:"'Orbitron',monospace",fontSize:13,color:'#ef4444',marginBottom:10,fontWeight:700}}>☢ Danger Zone</p>
-        <p style=${{fontSize:11,color:'#3a5070',marginBottom:12}}>This deletes data from the cloud database. Cannot be undone.</p>
         <button onClick=${async()=>{ if(window.confirm('Delete ALL data from cloud? Cannot be undone!')){ await sb.from('expenses').delete().neq('id','__none__'); await sb.from('income').delete().neq('id','__none__'); window.location.reload(); } }} style=${{background:'#160505',border:'1px solid #ef444440',color:'#ef4444',borderRadius:10,padding:'10px',cursor:'pointer',fontSize:13,fontWeight:700,fontFamily:"'DM Sans',sans-serif",width:'100%'}}>🗑 Clear All Data</button>
       </div>
     </div>
@@ -425,7 +399,6 @@ function App(){
   const [syncError,setSyncError]=useState(false);
   const [loaded,setLoaded]=useState(false);
 
-  // form state
   const [eAmt,setEAmt]=useState('');
   const [eCat,setECat]=useState('food');
   const [eSub,setESub]=useState('');
@@ -436,9 +409,8 @@ function App(){
   const [iNote,setINote]=useState('');
   const [iDate,setIDate]=useState(today());
 
-  const showToast=(msg,type='success')=>{ setToast({msg,type}); setTimeout(()=>setToast(null),2600); };
+  const showToast=useCallback((msg,type='success')=>{ setToast({msg,type}); setTimeout(()=>setToast(null),2600); },[]);
 
-  // load from supabase on mount, fallback to localStorage
   useEffect(()=>{
     (async()=>{
       setSyncing(true);
@@ -448,7 +420,7 @@ function App(){
         if(buds) setBudgets(buds);
         setSyncError(false);
       }catch(e){
-        // fallback to localStorage if offline
+        console.error('DB load error:',e);
         setExpenses(ls('xp_exp',[])); setIncome(ls('xp_inc',[]));
         const b=ls('xp_bud',null); if(b) setBudgets(b);
         setSyncError(true);
@@ -457,7 +429,6 @@ function App(){
     })();
   },[]);
 
-  // derived
   const monthExp=expenses.filter(e=>{ const d=new Date(e.date); return d.getMonth()===month&&d.getFullYear()===year; });
   const monthInc=income.filter(e=>{   const d=new Date(e.date); return d.getMonth()===month&&d.getFullYear()===year; });
   const totalIncome=monthInc.reduce((s,e)=>s+e.amount,0);
@@ -475,10 +446,7 @@ function App(){
     const entry={id:uid(),amount:Number(eAmt),category:eCat,subType:eSub,note:eNote,date:eDate,createdAt:Date.now()};
     setExpenses(p=>[entry,...p]); setEAmt(''); setENote(''); setESub('');
     showToast('Expense logged ⚡');
-    setSyncing(true);
-    try{ await dbAddExpense(entry); setSyncError(false); }
-    catch{ setSyncError(true); lsSet('xp_exp',[entry,...expenses]); }
-    finally{ setSyncing(false); }
+    try{ await dbAddExpense(entry); }catch{ lsSet('xp_exp',[entry,...expenses]); setSyncError(true); }
   };
 
   const onAddInc=async()=>{
@@ -486,34 +454,13 @@ function App(){
     const entry={id:uid(),amount:Number(iAmt),source:iSrc,note:iNote,date:iDate,createdAt:Date.now()};
     setIncome(p=>[entry,...p]); setIAmt(''); setINote('');
     showToast('Income added 💚');
-    setSyncing(true);
-    try{ await dbAddIncome(entry); setSyncError(false); }
-    catch{ setSyncError(true); lsSet('xp_inc',[entry,...income]); }
-    finally{ setSyncing(false); }
+    try{ await dbAddIncome(entry); }catch{ lsSet('xp_inc',[entry,...income]); setSyncError(true); }
   };
 
-  const deleteExp=async(id)=>{
-    setExpenses(p=>p.filter(e=>e.id!==id));
-    showToast('Deleted','info');
-    try{ await dbDeleteExpense(id); }catch{}
-  };
-
-  const deleteInc=async(id)=>{
-    setIncome(p=>p.filter(e=>e.id!==id));
-    showToast('Deleted','info');
-    try{ await dbDeleteIncome(id); }catch{}
-  };
-
-  const settleLend=async(id)=>{
-    setExpenses(p=>p.map(e=>e.id===id?{...e,settled:true}:e));
-    showToast('Marked received ✓');
-    try{ await dbSettleLend(id); }catch{}
-  };
-
-  const saveBudgets=async(b)=>{
-    setBudgets(b); lsSet('xp_bud',b);
-    try{ await dbSaveBudgets(b); }catch{}
-  };
+  const deleteExp=async(id)=>{ setExpenses(p=>p.filter(e=>e.id!==id)); showToast('Deleted','info'); try{ await dbDeleteExpense(id); }catch{} };
+  const deleteInc=async(id)=>{ setIncome(p=>p.filter(e=>e.id!==id));   showToast('Deleted','info'); try{ await dbDeleteIncome(id);  }catch{} };
+  const settleLend=async(id)=>{ setExpenses(p=>p.map(e=>e.id===id?{...e,settled:true}:e)); showToast('Marked received ✓'); try{ await dbSettleLend(id); }catch{} };
+  const saveBudgets=async(b)=>{ setBudgets(b); lsSet('xp_bud',b); try{ await dbSaveBudgets(b); }catch{} };
 
   const TABS=[
     {id:'dashboard',icon:'◈',label:'Dashboard'},
@@ -560,7 +507,6 @@ function App(){
     <style>${css}</style>
     <div class="scanlines"/>
     <${Toast} t=${toast}/>
-
     <div style=${{position:'sticky',top:0,zIndex:50,background:'#060d18ee',backdropFilter:'blur(24px)',borderBottom:'1px solid #1a2840'}}>
       <div style=${{maxWidth:1200,margin:'0 auto',padding:'14px 28px 0',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         <div>
@@ -586,7 +532,6 @@ function App(){
         </div>
       </div>
     </div>
-
     <div style=${{maxWidth:1200,margin:'0 auto',padding:'20px 28px 48px',position:'relative',zIndex:1}}>
       ${tab==='dashboard'&&html`<${DashView} month=${month} setMonth=${setMonth} year=${year} monthExp=${monthExp} monthInc=${monthInc} totalIncome=${totalIncome} totalSpent=${totalSpent} balance=${balance} byCategory=${byCategory} budgets=${budgets} pendingLends=${pendingLends} totalLend=${totalLend} settleLend=${settleLend} deleteExp=${deleteExp} deleteInc=${deleteInc}/>`}
       ${tab==='add'&&html`<${AddView} eAmt=${eAmt} setEAmt=${setEAmt} eCat=${eCat} setECat=${setECat} eSub=${eSub} setESub=${setESub} eNote=${eNote} setENote=${setENote} eDate=${eDate} setEDate=${setEDate} onAddExp=${onAddExp} iAmt=${iAmt} setIAmt=${setIAmt} iSrc=${iSrc} setISrc=${setISrc} iNote=${iNote} setINote=${setINote} iDate=${iDate} setIDate=${setIDate} onAddInc=${onAddInc}/>`}
