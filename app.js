@@ -1,20 +1,13 @@
-// XpenseOS — fixed React imports
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import React, { useState, useEffect, useRef, useCallback } from 'https://esm.sh/react@18';
-import { createRoot } from 'https://esm.sh/react-dom@18/client';
-import htm from 'https://esm.sh/htm@3';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import React, { useState, useEffect, useRef, useCallback } from 'https://esm.sh/react@18.2.0';
+import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
+import htm from 'https://esm.sh/htm@3.1.1';
 const html = htm.bind(React.createElement);
 
-/* ══════════════════════════════════════════
-   SUPABASE
-══════════════════════════════════════════ */
 const SB_URL = 'https://ywesuxgjkbnlrgddlatk.supabase.co';
-const SB_KEY = 'sb_publishable_y9hmEKzGjpatFJFM52DrOw_Io3KorvJ';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3ZXN1eGdqa2JubHJnZGRsYXRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MDYyMzgsImV4cCI6MjA5MjA4MjIzOH0.Ezdx2c1GKUwEolw4y6cnu1Pn_evX5vMBeGbSBXPY-uo';
 const sb = createClient(SB_URL, SB_KEY);
 
-/* ══════════════════════════════════════════
-   CONSTANTS
-══════════════════════════════════════════ */
 const CATS = [
   { id:'food',          label:'Food & Eating Out',  icon:'🍛', color:'#ff6b35', glow:'#ff6b3540', budget:4000 },
   { id:'house',         label:'House & Groceries',  icon:'🏠', color:'#00d4ff', glow:'#00d4ff40', budget:8000 },
@@ -37,33 +30,26 @@ const MSHORT  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','No
 const fmt   = n => '₹'+Math.abs(Number(n||0)).toLocaleString('en-IN',{maximumFractionDigits:0});
 const uid   = () => Math.random().toString(36).slice(2,10);
 const today = () => new Date().toISOString().split('T')[0];
-const ls    = (k,fb) => { try{ const v=localStorage.getItem(k); return v?JSON.parse(v):fb; }catch{ return fb; } };
+const lsGet = (k,fb) => { try{ const v=localStorage.getItem(k); return v?JSON.parse(v):fb; }catch{ return fb; } };
 const lsSet = (k,v)  => { try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} };
 
-/* ══════════════════════════════════════════
-   SUPABASE HELPERS
-══════════════════════════════════════════ */
-async function dbLoadExpenses(){ const {data,error}=await sb.from('expenses').select('*').order('created_at',{ascending:false}); if(error)throw error; return (data||[]).map(r=>({id:r.id,amount:Number(r.amount),category:r.category,subType:r.sub_type,note:r.note,date:r.date,createdAt:r.created_at,settled:r.settled})); }
+/* ── DB helpers ── */
+async function dbLoadExpenses(){ const {data,error}=await sb.from('expenses').select('*').order('created_at',{ascending:false}); if(error)throw error; return (data||[]).map(r=>({id:r.id,amount:Number(r.amount),category:r.category,subType:r.sub_type,note:r.note,date:r.date,createdAt:r.created_at,settled:r.settled||false})); }
 async function dbLoadIncome(){   const {data,error}=await sb.from('income').select('*').order('created_at',{ascending:false});   if(error)throw error; return (data||[]).map(r=>({id:r.id,amount:Number(r.amount),source:r.source,note:r.note,date:r.date,createdAt:r.created_at})); }
 async function dbLoadBudgets(){ const {data}=await sb.from('budgets').select('*').eq('id','default'); return data&&data[0]?data[0].data:null; }
-async function dbAddExpense(e){  await sb.from('expenses').insert({id:e.id,amount:e.amount,category:e.category,sub_type:e.subType||null,note:e.note||null,date:e.date,created_at:e.createdAt,settled:false}); }
-async function dbAddIncome(e){   await sb.from('income').insert({id:e.id,amount:e.amount,source:e.source,note:e.note||null,date:e.date,created_at:e.createdAt}); }
+async function dbAddExpense(e){  const {error}=await sb.from('expenses').insert({id:e.id,amount:e.amount,category:e.category,sub_type:e.subType||null,note:e.note||null,date:e.date,created_at:e.createdAt,settled:false}); if(error)throw error; }
+async function dbAddIncome(e){   const {error}=await sb.from('income').insert({id:e.id,amount:e.amount,source:e.source,note:e.note||null,date:e.date,created_at:e.createdAt}); if(error)throw error; }
 async function dbDeleteExpense(id){ await sb.from('expenses').delete().eq('id',id); }
 async function dbDeleteIncome(id){  await sb.from('income').delete().eq('id',id); }
 async function dbSettleLend(id){    await sb.from('expenses').update({settled:true}).eq('id',id); }
 async function dbSaveBudgets(data){ await sb.from('budgets').upsert({id:'default',data}); }
 
-/* ══════════════════════════════════════════
-   SMALL COMPONENTS
-══════════════════════════════════════════ */
+/* ── Small components ── */
 function GlowBar({spent,budget,color}){
   const pct=Math.min((spent/Math.max(budget,1))*100,100);
   const c=pct>=90?'#ef4444':pct>=70?'#f59e0b':color;
-  return html`<div style=${{height:5,background:'#0a0f1a',borderRadius:99,overflow:'hidden'}}>
-    <div style=${{width:`${pct}%`,height:'100%',background:c,borderRadius:99,boxShadow:`0 0 8px ${c}80`,transition:'width .6s cubic-bezier(.34,1.56,.64,1)'}}/>
-  </div>`;
+  return html`<div style=${{height:5,background:'#0a0f1a',borderRadius:99,overflow:'hidden'}}><div style=${{width:`${pct}%`,height:'100%',background:c,borderRadius:99,boxShadow:`0 0 8px ${c}80`,transition:'width .6s cubic-bezier(.34,1.56,.64,1)'}}/></div>`;
 }
-
 function Pill({label,value,color,sub}){
   return html`<div style=${{background:`linear-gradient(135deg,${color}15,${color}05)`,border:`1px solid ${color}30`,borderRadius:14,padding:'14px 16px',flex:1,minWidth:0}}>
     <p style=${{fontSize:10,color:'#3a5070',margin:'0 0 4px',fontWeight:700,letterSpacing:1,textTransform:'uppercase',fontFamily:"'DM Mono',monospace"}}>${label}</p>
@@ -71,31 +57,26 @@ function Pill({label,value,color,sub}){
     ${sub&&html`<p style=${{fontSize:10,color:'#3a5070',margin:'3px 0 0'}}>${sub}</p>`}
   </div>`;
 }
-
-function SyncDot({syncing,error}){
-  const c=error?'#ef4444':syncing?'#f59e0b':'#00ff88';
-  const label=error?'offline':syncing?'syncing':'synced';
+function SyncBadge({state}){
+  const map={syncing:['#f59e0b','syncing...'],ok:['#00ff88','synced ✓'],error:['#ef4444','offline']};
+  const [c,label]=map[state]||map.ok;
   return html`<div style=${{display:'flex',alignItems:'center',gap:5}}>
-    <div style=${{width:7,height:7,borderRadius:'50%',background:c,boxShadow:`0 0 8px ${c}`,animation:syncing?'pulse 1s infinite':'none'}}/>
+    <div style=${{width:7,height:7,borderRadius:'50%',background:c,boxShadow:`0 0 8px ${c}`,animation:state==='syncing'?'pulse 1s infinite':'none'}}/>
     <span style=${{fontSize:10,color:c,fontFamily:"'DM Mono',monospace",letterSpacing:1}}>${label}</span>
   </div>`;
 }
-
 function Toast({t}){
   if(!t)return null;
-  const c={success:'#00ff88',error:'#ef4444',info:'#00d4ff'}[t.type]||'#00ff88';
+  const c={success:'#00ff88',error:'#ef4444',info:'#00d4ff',warn:'#f59e0b'}[t.type]||'#00ff88';
   return html`<div style=${{position:'fixed',top:24,left:'50%',transform:'translateX(-50%)',background:'#060d18',border:`1px solid ${c}`,color:c,borderRadius:12,padding:'10px 22px',fontSize:13,fontWeight:700,zIndex:9999,boxShadow:`0 0 24px ${c}40`,whiteSpace:'nowrap',fontFamily:"'DM Mono',monospace",animation:'toastIn .3s ease'}}>${t.msg}</div>`;
 }
 
-/* ══════════════════════════════════════════
-   ADD VIEW
-══════════════════════════════════════════ */
+/* ── ADD VIEW ── */
 function AddView({eAmt,setEAmt,eCat,setECat,eSub,setESub,eNote,setENote,eDate,setEDate,onAddExp,iAmt,setIAmt,iSrc,setISrc,iNote,setINote,iDate,setIDate,onAddInc}){
   const cat=CATS.find(c=>c.id===eCat);
   const eAmtR=useRef(),eNoteR=useRef(),eDateR=useRef();
   const iAmtR=useRef(),iNoteR=useRef(),iDateR=useRef();
   const jump=(e,nr,action)=>{ if(e.key==='Enter'){e.preventDefault(); nr?nr.current?.focus():action?.(); } };
-
   return html`<div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,alignItems:'start'}}>
     <div class="card" style=${{border:'1px solid #ff6b3520'}}>
       <div style=${{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent,#ff6b35,transparent)',borderRadius:'16px 16px 0 0'}}/>
@@ -136,7 +117,6 @@ function AddView({eAmt,setEAmt,eCat,setECat,eSub,setESub,eNote,setENote,eDate,se
       </div>
       <button class="btn-cyan" onClick=${onAddExp}>Add Expense ⚡</button>
     </div>
-
     <div class="card" style=${{border:'1px solid #00ff8820'}}>
       <div style=${{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent,#00ff88,transparent)',borderRadius:'16px 16px 0 0'}}/>
       <p style=${{fontFamily:"'Orbitron',monospace",fontSize:15,color:'#00ff88',marginBottom:4,fontWeight:700}}>💚 Log Income</p>
@@ -168,9 +148,7 @@ function AddView({eAmt,setEAmt,eCat,setECat,eSub,setESub,eNote,setENote,eDate,se
   </div>`;
 }
 
-/* ══════════════════════════════════════════
-   DASHBOARD VIEW
-══════════════════════════════════════════ */
+/* ── DASHBOARD VIEW ── */
 function DashView({month,setMonth,year,monthExp,monthInc,totalIncome,totalSpent,balance,byCategory,budgets,pendingLends,totalLend,settleLend,deleteExp,deleteInc}){
   const sorted=[...CATS].sort((a,b)=>(byCategory[b.id]||0)-(byCategory[a.id]||0));
   const overBudget=CATS.filter(c=>byCategory[c.id]>(budgets[c.id]||c.budget));
@@ -183,7 +161,7 @@ function DashView({month,setMonth,year,monthExp,monthInc,totalIncome,totalSpent,
       <div style=${{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent,#00d4ff,transparent)',borderRadius:'16px 16px 0 0'}}/>
       <p style=${{fontFamily:"'DM Mono',monospace",fontSize:10,color:'#3a5070',letterSpacing:2,marginBottom:6}}>${MONTHS[month].toUpperCase()} ${year} · OVERVIEW</p>
       <p style=${{fontFamily:"'Orbitron',monospace",fontSize:36,fontWeight:900,color:balance>=0?'#00ff88':'#ef4444',letterSpacing:-1,textShadow:`0 0 30px ${balance>=0?'#00ff8840':'#ef444440'}`,marginBottom:4}}>${balance>=0?'+':'-'}${fmt(balance)}</p>
-      <p style=${{fontSize:12,color:'#3a5070',marginBottom:16}}>${totalIncome>0?`${Math.round((balance/totalIncome)*100)}% of income remaining`:'No income logged yet — go to Add tab'}</p>
+      <p style=${{fontSize:12,color:'#3a5070',marginBottom:16}}>${totalIncome>0?`${Math.round((balance/totalIncome)*100)}% of income remaining`:'No income logged — go to Add tab'}</p>
       ${totalIncome>0&&html`<div style=${{marginBottom:16}}>
         <${GlowBar} spent=${totalSpent} budget=${totalIncome} color="#00d4ff"/>
         <div style=${{display:'flex',justifyContent:'space-between',marginTop:5}}>
@@ -257,9 +235,7 @@ function DashView({month,setMonth,year,monthExp,monthInc,totalIncome,totalSpent,
   </div>`;
 }
 
-/* ══════════════════════════════════════════
-   HISTORY VIEW
-══════════════════════════════════════════ */
+/* ── HISTORY VIEW ── */
 function HistView({monthExp,monthInc,deleteExp,deleteInc,settleLend}){
   const [search,setSearch]=useState('');
   const [filterCat,setFilterCat]=useState('all');
@@ -311,15 +287,13 @@ function HistView({monthExp,monthInc,deleteExp,deleteInc,settleLend}){
   </div>`;
 }
 
-/* ══════════════════════════════════════════
-   BUDGET VIEW
-══════════════════════════════════════════ */
+/* ── BUDGET VIEW ── */
 function BudgetView({byCategory,budgets,saveBudgets,showToast}){
   const [local,setLocal]=useState({...budgets});
   return html`<div style=${{display:'flex',flexDirection:'column',gap:16}}>
     <div class="card">
       <p style=${{fontFamily:"'Orbitron',monospace",fontSize:15,color:'#00d4ff',marginBottom:4,fontWeight:700}}>Monthly Budgets</p>
-      <p style=${{fontSize:12,color:'#3a5070',marginBottom:20}}>Type a new amount · press <span class="kbd">Enter</span> per field or Save All.</p>
+      <p style=${{fontSize:12,color:'#3a5070',marginBottom:20}}>Type new amount · <span class="kbd">Enter</span> per field or Save All.</p>
       <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
         ${CATS.map(c=>{
           const bud=local[c.id]||c.budget;
@@ -343,9 +317,7 @@ function BudgetView({byCategory,budgets,saveBudgets,showToast}){
   </div>`;
 }
 
-/* ══════════════════════════════════════════
-   SETTINGS VIEW
-══════════════════════════════════════════ */
+/* ── SETTINGS VIEW ── */
 function SettingsView({expenses,income,pendingLends,showToast}){
   const totalS=expenses.reduce((s,e)=>s+e.amount,0);
   const totalI=income.reduce((s,e)=>s+e.amount,0);
@@ -354,7 +326,7 @@ function SettingsView({expenses,income,pendingLends,showToast}){
     <div style=${{display:'flex',flexDirection:'column',gap:16}}>
       <div class="card" style=${{border:'1px solid #00d4ff20'}}>
         <p style=${{fontFamily:"'Orbitron',monospace",fontSize:14,color:'#00d4ff',marginBottom:14,fontWeight:700}}>☁️ Cloud Sync</p>
-        <p style=${{fontSize:12,color:'#3a5070',lineHeight:1.7}}>Your data syncs automatically to Supabase. Open the same URL on any device and your data will be there.</p>
+        <p style=${{fontSize:12,color:'#3a5070',lineHeight:1.7}}>Data syncs to Supabase automatically. Open on any device — laptop or iPhone — same data everywhere.</p>
         <div style=${{marginTop:12,background:'#070e1c',border:'1px solid #1a2840',borderRadius:10,padding:'10px 14px'}}>
           <p style=${{fontSize:11,color:'#3a5070',fontFamily:"'DM Mono',monospace"}}>🌐 hvbjgiy.github.io/xpenseos</p>
         </div>
@@ -395,8 +367,7 @@ function App(){
   const [year]=useState(now.getFullYear());
   const [tab,setTab]=useState('dashboard');
   const [toast,setToast]=useState(null);
-  const [syncing,setSyncing]=useState(false);
-  const [syncError,setSyncError]=useState(false);
+  const [syncState,setSyncState]=useState('syncing');
   const [loaded,setLoaded]=useState(false);
 
   const [eAmt,setEAmt]=useState('');
@@ -413,24 +384,30 @@ function App(){
 
   useEffect(()=>{
     (async()=>{
-      setSyncing(true);
+      setSyncState('syncing');
       try{
         const [exps,incs,buds]=await Promise.all([dbLoadExpenses(),dbLoadIncome(),dbLoadBudgets()]);
         setExpenses(exps); setIncome(incs);
         if(buds) setBudgets(buds);
-        setSyncError(false);
-      }catch(e){
-        console.error('DB load error:',e);
-        setExpenses(ls('xp_exp',[])); setIncome(ls('xp_inc',[]));
-        const b=ls('xp_bud',null); if(b) setBudgets(b);
-        setSyncError(true);
-        showToast('Offline — using local data','info');
-      }finally{ setSyncing(false); setLoaded(true); }
+        // also save to localStorage as backup
+        lsSet('xp_exp',exps); lsSet('xp_inc',incs);
+        setSyncState('ok');
+      }catch(err){
+        console.error('Supabase load failed:',err);
+        // fallback to localStorage
+        const exps=lsGet('xp_exp',[]);
+        const incs=lsGet('xp_inc',[]);
+        const buds=lsGet('xp_bud',null);
+        setExpenses(exps); setIncome(incs);
+        if(buds) setBudgets(buds);
+        setSyncState('error');
+        showToast('Could not reach database — showing local data','warn');
+      } finally{ setLoaded(true); }
     })();
   },[]);
 
   const monthExp=expenses.filter(e=>{ const d=new Date(e.date); return d.getMonth()===month&&d.getFullYear()===year; });
-  const monthInc=income.filter(e=>{   const d=new Date(e.date); return d.getMonth()===month&&d.getFullYear()===year; });
+  const monthInc=income.filter(e=>{ const d=new Date(e.date); return d.getMonth()===month&&d.getFullYear()===year; });
   const totalIncome=monthInc.reduce((s,e)=>s+e.amount,0);
   const totalSpent=monthExp.reduce((s,e)=>s+e.amount,0);
   const balance=totalIncome-totalSpent;
@@ -444,22 +421,30 @@ function App(){
     const cat=CATS.find(c=>c.id===eCat);
     if(cat?.subs&&!eSub){ showToast('Select a sub-type','error'); return; }
     const entry={id:uid(),amount:Number(eAmt),category:eCat,subType:eSub,note:eNote,date:eDate,createdAt:Date.now()};
-    setExpenses(p=>[entry,...p]); setEAmt(''); setENote(''); setESub('');
+    const newExps=[entry,...expenses];
+    setExpenses(newExps); lsSet('xp_exp',newExps);
+    setEAmt(''); setENote(''); setESub('');
     showToast('Expense logged ⚡');
-    try{ await dbAddExpense(entry); }catch{ lsSet('xp_exp',[entry,...expenses]); setSyncError(true); }
+    setSyncState('syncing');
+    try{ await dbAddExpense(entry); setSyncState('ok'); }
+    catch(err){ console.error(err); setSyncState('error'); showToast('Saved locally — will sync when online','warn'); }
   };
 
   const onAddInc=async()=>{
     if(!iAmt||Number(iAmt)<=0){ showToast('Enter valid amount','error'); return; }
     const entry={id:uid(),amount:Number(iAmt),source:iSrc,note:iNote,date:iDate,createdAt:Date.now()};
-    setIncome(p=>[entry,...p]); setIAmt(''); setINote('');
+    const newIncs=[entry,...income];
+    setIncome(newIncs); lsSet('xp_inc',newIncs);
+    setIAmt(''); setINote('');
     showToast('Income added 💚');
-    try{ await dbAddIncome(entry); }catch{ lsSet('xp_inc',[entry,...income]); setSyncError(true); }
+    setSyncState('syncing');
+    try{ await dbAddIncome(entry); setSyncState('ok'); }
+    catch(err){ console.error(err); setSyncState('error'); }
   };
 
-  const deleteExp=async(id)=>{ setExpenses(p=>p.filter(e=>e.id!==id)); showToast('Deleted','info'); try{ await dbDeleteExpense(id); }catch{} };
-  const deleteInc=async(id)=>{ setIncome(p=>p.filter(e=>e.id!==id));   showToast('Deleted','info'); try{ await dbDeleteIncome(id);  }catch{} };
-  const settleLend=async(id)=>{ setExpenses(p=>p.map(e=>e.id===id?{...e,settled:true}:e)); showToast('Marked received ✓'); try{ await dbSettleLend(id); }catch{} };
+  const deleteExp=async(id)=>{ const n=expenses.filter(e=>e.id!==id); setExpenses(n); lsSet('xp_exp',n); showToast('Deleted','info'); try{ await dbDeleteExpense(id); }catch{} };
+  const deleteInc=async(id)=>{ const n=income.filter(e=>e.id!==id);   setIncome(n);   lsSet('xp_inc',n); showToast('Deleted','info'); try{ await dbDeleteIncome(id);  }catch{} };
+  const settleLend=async(id)=>{ const n=expenses.map(e=>e.id===id?{...e,settled:true}:e); setExpenses(n); lsSet('xp_exp',n); showToast('Marked received ✓'); try{ await dbSettleLend(id); }catch{} };
   const saveBudgets=async(b)=>{ setBudgets(b); lsSet('xp_bud',b); try{ await dbSaveBudgets(b); }catch{} };
 
   const TABS=[
@@ -512,8 +497,8 @@ function App(){
         <div>
           <p style=${{fontFamily:"'Orbitron',monospace",fontSize:20,fontWeight:900,color:'#00d4ff',margin:0,letterSpacing:3,textShadow:'0 0 24px #00d4ff50'}}>XPENSE<span style=${{color:'#00ff88'}}>OS</span></p>
           <div style=${{display:'flex',alignItems:'center',gap:10,marginTop:2}}>
-            <p style=${{fontFamily:"'DM Mono',monospace",fontSize:10,color:'#3a5070',margin:0,letterSpacing:1.5}}>${MONTHS[month].toUpperCase()} ${year} · ${monthExp.length} transactions</p>
-            <${SyncDot} syncing=${syncing} error=${syncError}/>
+            <p style=${{fontFamily:"'DM Mono',monospace",fontSize:10,color:'#3a5070',margin:0}}>${MONTHS[month].toUpperCase()} ${year} · ${monthExp.length} transactions</p>
+            <${SyncBadge} state=${syncState}/>
           </div>
         </div>
         <div style=${{display:'flex',gap:24,alignItems:'center'}}>
@@ -542,7 +527,6 @@ function App(){
   </div>`;
 }
 
-// boot
 const root=createRoot(document.getElementById('root'));
 root.render(html`<${App}/>`);
 document.getElementById('splash').style.opacity='0';
